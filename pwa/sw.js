@@ -19,7 +19,9 @@ self.addEventListener("fetch", e => {
   // Never intercept the Google Apps Script sync calls
   if (url.origin !== location.origin || e.request.method !== "GET") return;
   e.respondWith(
-    fetch(e.request)
+    // cache:"no-cache" = always revalidate with the server (fast ETag check),
+    // so a pushed update is picked up on the very next launch
+    fetch(e.request, { cache: "no-cache" })
       .then(r => {
         const copy = r.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
