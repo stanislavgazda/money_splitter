@@ -481,14 +481,25 @@ function renderSettings(){
     <div class="spacer"></div>
     <label>Symbol meny</label>
     <input id="s-curr" value="${esc(S.currency)}" style="max-width:90px">
-  </div>
+  </div>`;
+
+  /* ===== ZAKOMENTOVANÉ (júl 2026): karta „Záloha" už nie je potrebná =====
+     Export/import slúžil na ručný prenos dát medzi zariadeniami v čase,
+     keď dáta žili len lokálne v telefóne. Odkedy sa záznamy aj nastavenia
+     synchronizujú cez Google Sheet, nové zariadenie stačí otvoriť a zadať
+     heslo – všetko sa stiahne samo. „Vymazať lokálne dáta" bolo tiež
+     zbytočné: po vymazaní sa dáta okamžite obnovili zo Sheetu.
+     Oživenie: vlož tento HTML späť do template stringu vyššie a odkomentuj
+     obsluhy s-export / s-import / s-wipe na konci tejto funkcie.
+
   <div class="card">
     <h2>Záloha (dáta tohto zariadenia)</h2>
     <button class="btn small ghost" id="s-export">Kopírovať exportný kód</button>
     <button class="btn small ghost" id="s-import">Vložiť importný kód</button>
     <div class="spacer"></div>
     <button class="btn small danger" id="s-wipe">Vymazať lokálne dáta</button>
-  </div>`;
+  </div>
+  ===== koniec zakomentovaného HTML ===== */
 
   $("#s-testurl").onclick = async ()=>{
     S.syncUrl = $("#s-url").value.trim(); saveLS("ms_settings",S);
@@ -530,6 +541,10 @@ function renderSettings(){
     if(isNaN(p)||p<0){ alert("Neplatná cena"); return; }
     S.components.push({name:n.trim(),price:p}); saveSettings(); meal=null; renderSettings();
   };
+  /* ===== ZAKOMENTOVANÉ (júl 2026): obsluhy tlačidiel karty „Záloha" =====
+     Zbytočné od zavedenia synchronizácie cez Google Sheet (pozri komentár
+     pri zakomentovanom HTML vyššie). Ak kartu oživíš, odkomentuj aj toto.
+
   $("#s-export").onclick = async ()=>{
     const code=JSON.stringify({settings:S, ledger, queue, pass:PASS});
     try{ await navigator.clipboard.writeText(code); alert("Exportný kód skopírovaný do schránky. Vložte ho na druhom zariadení pomocou 'Vložiť importný kód'."); }
@@ -551,6 +566,7 @@ function renderSettings(){
     ["ms_settings","ms_ledger","ms_queue","ms_pass"].forEach(k=>localStorage.removeItem(k));
     location.reload();
   };
+  ===== koniec zakomentovaných obslúh ===== */
 }
 
 /* ---------- tabs & init ---------- */
