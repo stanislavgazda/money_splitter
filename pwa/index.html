@@ -285,18 +285,16 @@ function computeBalances(){
 /* ---------- meal tab ---------- */
 function newMealState(){
   const portions={}; S.families.forEach(f=>portions[f]=0);
-  return {date:today(), payer:S.families[0]||"", sel:new Set(), custom:[], portions, override:""};
+  const amounts={};  S.families.forEach(f=>amounts[f]=0);
+  // mode: "portions" = odhad podľa porcií a cien, "sums" = konkrétne sumy z účtu
+  return {date:today(), payer:S.families[0]||"", mode:"portions", sel:new Set(), custom:[], portions, amounts, override:""};
 }
 function renderMeal(){
   if(!meal) meal = newMealState();
   const el = $("#tab-meal");
-  el.innerHTML = `
-  <div class="card">
-    <div class="row">
-      <div><label>Dátum</label><input type="date" id="m-date" value="${meal.date}"></div>
-      <div><label>Kto platil / varil?</label><select id="m-payer">${S.families.map(f=>`<option ${f===meal.payer?"selected":""}>${esc(f)}</option>`).join("")}</select></div>
-    </div>
-  </div>
+
+  /* UI pre režim "Na porcie" (pôvodné správanie) */
+  const portionsUI = `
   <div class="card">
     <h2>Čo sa podávalo? (na osobu)</h2>
     <div class="chips" id="m-chips">
@@ -326,41 +324,107 @@ function renderMeal(){
     <input type="number" step="0.01" min="0" id="m-override" placeholder="nechaj prázdne ak nevieš" value="${meal.override}">
     <div class="spacer"></div>
     <div class="summary" id="m-summary"></div>
+  </div>`;
+
+  /* UI pre režim "Konkrétne sumy" – jedna suma na rodinu, + pripočíta, − odpočíta */
+  const sumsUI = `
+  <div class="card">
+    <h2>Sumy na rodinu</h2>
+    <div id="m-amounts">
+      ${S.families.map(f=>`
+        <div class="famrow"><span>${esc(f)}</span>
+          <span class="stepper">
+            <button data-af="${esc(f)}" data-op="-">−</button>
+            <span class="val" id="a-${esc(f)}">${fmt(meal.amounts[f]||0)}</span>
+            <button data-af="${esc(f)}" data-op="+">+</button>
+          </span>
+        </div>`).join("")}
+    </div>
+    <div class="muted">+ pripočíta ďalšiu položku z účtu (napr. nápoj 2 €), − odpočíta pri omyle. Na rodinu je stále len jedno výsledné číslo.</div>
   </div>
+  <div class="card">
+    <h2>Spolu za účet</h2>
+    <div class="summary" id="m-summary"></div>
+  </div>`;
+
+  el.innerHTML = `
+  <div class="card">
+    <div class="row">
+      <div><label>Dátum</label><input type="date" id="m-date" value="${meal.date}"></div>
+      <div><label>Kto platil / varil?</label><select id="m-payer">${S.families.map(f=>`<option ${f===meal.payer?"selected":""}>${esc(f)}</option>`).join("")}</select></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Spôsob prerozdelenia</h2>
+    <div class="chips">
+      <button class="chip ${meal.mode==="portions"?"on":""}" id="mode-portions">Na porcie</button>
+      <button class="chip ${meal.mode==="sums"?"on":""}" id="mode-sums">Konkrétne sumy</button>
+    </div>
+  </div>
+  ${meal.mode==="sums" ? sumsUI : portionsUI}
   <button class="btn" id="m-save">Vypočítať a uložiť</button>
   <div id="m-result"></div>`;
 
   $("#m-date").onchange = e=>{ meal.date=e.target.value; };
   $("#m-payer").onchange = e=>{ meal.payer=e.target.value; updateSummary(); };
-  $("#m-override").oninput = e=>{ meal.override=e.target.value; updateSummary(); };
-  $("#m-chips").onclick = e=>{
-    const chip=e.target.closest(".chip"); if(!chip) return;
-    if(chip.dataset.i!==undefined){
-      const i=+chip.dataset.i;
-      meal.sel.has(i)?meal.sel.delete(i):meal.sel.add(i);
-      chip.classList.toggle("on");
-    }else if(chip.dataset.c!==undefined){
-      meal.custom.splice(+chip.dataset.c,1); renderMeal(); return;
-    }
-    updateSummary();
-  };
-  $("#m-addcustom").onclick = ()=>{
-    const name=prompt("Názov položky (napr. Guláš):"); if(!name) return;
-    const p=parseFloat(prompt("Cena na osobu ("+S.currency+"):")||"");
-    if(isNaN(p)||p<0){ alert("Neplatná cena"); return; }
-    meal.custom.push({name, price:p}); renderMeal();
-  };
-  $("#m-portions").onclick = e=>{
-    const b=e.target.closest("button"); if(!b) return;
-    const f=b.dataset.f, d=parseFloat(b.dataset.d);
-    meal.portions[f]=Math.max(0, round2((meal.portions[f]||0)+d));
-    document.getElementById("p-"+f).textContent=meal.portions[f];
-    updateSummary();
-  };
+  $("#mode-portions").onclick = ()=>{ if(meal.mode!=="portions"){ meal.mode="portions"; renderMeal(); } };
+  $("#mode-sums").onclick = ()=>{ if(meal.mode!=="sums"){ meal.mode="sums"; renderMeal(); } };
+
+  if(meal.mode==="sums"){
+    $("#m-amounts").onclick = e=>{
+      const b=e.target.closest("button"); if(!b) return;
+      const f=b.dataset.af, op=b.dataset.op;
+      const raw=prompt(op==="+"
+        ? "Suma na pripočítanie pre '"+f+"' ("+S.currency+"):"
+        : "Suma na odpočítanie pre '"+f+"' ("+S.currency+"):");
+      if(raw===null || raw.trim()==="") return;
+      const v=parseFloat(raw.replace(",", "."));
+      if(isNaN(v)||v<=0){ alert("Neplatná suma"); return; }
+      const next = round2((meal.amounts[f]||0) + (op==="+"? v : -v));
+      if(next<0){ alert("Výsledok by bol záporný ("+fmt(next)+"). Odpočítavaš viac, než je zadané."); return; }
+      meal.amounts[f]=next;
+      document.getElementById("a-"+f).textContent=fmt(next);
+      updateSummary();
+    };
+  }else{
+    $("#m-override").oninput = e=>{ meal.override=e.target.value; updateSummary(); };
+    $("#m-chips").onclick = e=>{
+      const chip=e.target.closest(".chip"); if(!chip) return;
+      if(chip.dataset.i!==undefined){
+        const i=+chip.dataset.i;
+        meal.sel.has(i)?meal.sel.delete(i):meal.sel.add(i);
+        chip.classList.toggle("on");
+      }else if(chip.dataset.c!==undefined){
+        meal.custom.splice(+chip.dataset.c,1); renderMeal(); return;
+      }
+      updateSummary();
+    };
+    $("#m-addcustom").onclick = ()=>{
+      const name=prompt("Názov položky (napr. Guláš):"); if(!name) return;
+      const p=parseFloat(prompt("Cena na osobu ("+S.currency+"):")||"");
+      if(isNaN(p)||p<0){ alert("Neplatná cena"); return; }
+      meal.custom.push({name, price:p}); renderMeal();
+    };
+    $("#m-portions").onclick = e=>{
+      const b=e.target.closest("button"); if(!b) return;
+      const f=b.dataset.f, d=parseFloat(b.dataset.d);
+      meal.portions[f]=Math.max(0, round2((meal.portions[f]||0)+d));
+      document.getElementById("p-"+f).textContent=meal.portions[f];
+      updateSummary();
+    };
+  }
   $("#m-save").onclick = saveMeal;
   updateSummary();
 }
 function mealCalc(){
+  if(meal.mode==="sums"){
+    const shares={}; let total=0;
+    for(const f in meal.amounts){
+      const a=round2(meal.amounts[f]||0);
+      if(a>0){ shares[f]=a; total+=a; }
+    }
+    return {perPerson:0, totalPortions:0, total:round2(total), shares};
+  }
   let perPerson=0;
   meal.sel.forEach(i=>{ if(S.components[i]) perPerson+=S.components[i].price; });
   meal.custom.forEach(c=>perPerson+=c.price);
@@ -379,6 +443,13 @@ function updateSummary(){
   const c=mealCalc();
   const owes = Object.keys(c.shares).filter(f=>f!==meal.payer)
     .map(f=>`<div>${esc(f)} → ${esc(meal.payer)}: <b>${fmt(c.shares[f])}</b></div>`).join("");
+  if(meal.mode==="sums"){
+    $("#m-summary").innerHTML = `
+      <div class="big">${fmt(c.total)}</div>
+      <div class="muted">Porovnaj s celkovou sumou na účte.</div>
+      ${owes || '<div class="muted">Pridaj sumy, aby si videl, kto koľko dlží.</div>'}`;
+    return;
+  }
   $("#m-summary").innerHTML = `
     <div>Na osobu: <b>${fmt(c.perPerson)}</b> · Porcie: <b>${c.totalPortions}</b></div>
     <div class="big">${fmt(c.total)}</div>
@@ -386,11 +457,17 @@ function updateSummary(){
 }
 function saveMeal(){
   const c=mealCalc();
-  if(c.totalPortions<=0){ alert("Zadajte aspoň jednu porciu."); return; }
-  if(c.total<=0){ alert("Vyberte položky jedla alebo zadajte celkovú sumu."); return; }
-  const desc=[...meal.sel].map(i=>S.components[i].name).concat(meal.custom.map(x=>x.name)).join(", ")||"Jedlo";
+  if(meal.mode==="sums"){
+    if(c.total<=0){ alert("Zadajte aspoň jednu sumu."); return; }
+  }else{
+    if(c.totalPortions<=0){ alert("Zadajte aspoň jednu porciu."); return; }
+    if(c.total<=0){ alert("Vyberte položky jedla alebo zadajte celkovú sumu."); return; }
+  }
+  const desc = meal.mode==="sums"
+    ? "Účet – konkrétne sumy"
+    : ([...meal.sel].map(i=>S.components[i].name).concat(meal.custom.map(x=>x.name)).join(", ")||"Jedlo");
   const entry={
-    id:uid(), kind:"meal", date:meal.date, payer:meal.payer, desc,
+    id:uid(), kind:"meal", mode:meal.mode, date:meal.date, payer:meal.payer, desc,
     perPerson:round2(c.perPerson), total:round2(c.total),
     portions:Object.fromEntries(Object.entries(meal.portions).filter(([,v])=>v>0)),
     shares:c.shares
@@ -423,7 +500,9 @@ function renderBalances(){
     ${hist.map(e=> e.kind==="meal" ? `
       <div class="hist"><div>
         <div><b>${esc(e.payer)}</b> zaplatil(a) ${fmt(e.total)} — ${esc(e.desc||"")}</div>
-        <div class="sub">${esc(e.date||"")} · ${Object.entries(e.portions||{}).map(([f,v])=>esc(f)+": "+v).join(", ")}</div>
+        <div class="sub">${esc(e.date||"")} · ${e.mode==="sums"
+          ? Object.entries(e.shares||{}).map(([f,v])=>esc(f)+": "+fmt(v)).join(", ")
+          : Object.entries(e.portions||{}).map(([f,v])=>esc(f)+": "+v).join(", ")}</div>
       </div><button class="x" data-del="${e.id}">✕</button></div>` : `
       <div class="hist"><div>
         <div>💸 <b>${esc(e.from)}</b> zaplatil(a) <b>${esc(e.to)}</b> ${fmt(e.amount)}</div>
