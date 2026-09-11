@@ -92,6 +92,54 @@ is not behind the family password.
 The `Ledger` sheet gains two columns (`Poznámka`, `Účtenka`) automatically on
 the first entry saved after the update. Existing rows are preserved.
 
+## Testing before the family sees it
+
+Work on a `feat/...` branch. GitHub Pages only serves `main`, so nothing on a
+branch reaches anyone's phone. Test locally against a **separate** Sheet —
+branching separates code, but the backend has no branches, so without this you'd
+be writing into the real family ledger.
+
+### Once per test environment
+
+1. **Copy the Sheet** – open the production sheet → **File → Make a copy**
+   ("Money Splitter TEST"). Use a copy rather than an empty sheet: schema
+   changes then run against real data, at zero risk to the original.
+2. **Extensions → Apps Script** in the copy, paste all of `google-apps-script.gs`.
+3. **⚙️ Project Settings → Script properties** – add `TOKEN` (any test password)
+   and `GEMINI_API_KEY`. Copies do **not** inherit script properties; without
+   these the script refuses every request.
+4. Change `var PHOTO_FOLDER` to `Komu koľko – účtenky TEST`, or test photos land
+   in the production receipts folder. This edit lives only in the test copy –
+   never commit it. Re-apply it each time you paste an updated script.
+5. Run **`testDrive`** (function dropdown → Run) and authorize
+   (*Advanced → Go to … (unsafe)* is expected for your own script).
+6. **Deploy → New deployment** → gear → **Web app**, Execute as **Me**, access
+   **Anyone** → Deploy. The dialog shows the **Web app URL ending in `/exec`** –
+   that's what the app needs. Lost it? **Deploy → Manage deployments**.
+
+Do steps 4–5 *before* step 6: a deployment pins the code as it was at that
+moment, so editing afterwards means Manage deployments → edit → New version.
+`testDrive` is the exception – run from the editor it always uses current code,
+so the folder appearing in Drive does not prove the deployed URL will use it.
+
+### Each test session
+
+```bash
+cd pwa && python -m http.server 8000 --bind 127.0.0.1
+```
+
+Open <http://localhost:8000/>, F12 → device toolbar (Ctrl+Shift+M) for phone
+layout. In **⚙️ Nastavenia** paste the test `/exec` URL and test password, then
+**Uložiť a otestovať pripojenie**.
+
+Never edit `DEFAULT_SYNC_URL` for this. The URL is stored per browser origin, so
+`localhost` keeps pointing at test while the deployed app keeps pointing at
+production — there is nothing to remember to revert before merging.
+
+What localhost cannot cover: real camera capture (desktop opens a file picker),
+iOS Safari, and installed-PWA behaviour. Worth one pass on a real phone after
+merging, before telling anyone the feature exists.
+
 ## Making changes later
 
 - **App (UI, logic):** edit `pwa/index.html` in VS Code → `git push` (or drag-and-drop onto the repo on github.com). Pages redeploys in ~1 min; phones load the new version next time the app is opened online. No reinstall needed.
