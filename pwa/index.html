@@ -546,7 +546,7 @@ function renderMeal(){
   <div class="card">
     <h2>Sken účtu</h2>
     ${meal.scanBusy ? `<div class="muted">${ico("spinner","spin")} Analyzujem účet… (zvyčajne do 15 s)</div>` : `
-      <input type="file" id="m-billfile" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="m-billfile" accept="image/*" style="display:none">
       <button class="btn small" id="m-scanbtn">${ico("camera")} ${meal.items ? "Skenovať znova (nahradí položky)" : "Odfotiť / vybrať účet"}</button>
       ${meal.items ? `<button class="btn small ghost" id="m-additem">+ Pridať položku ručne</button>` : ""}
     `}
@@ -589,7 +589,7 @@ function renderMeal(){
         </div>
       </div>`
     : meal.mode==="scan" ? `<div class="muted">Odfotená účtenka sa priloží automaticky.</div>`
-    : `<input type="file" id="m-photofile" accept="image/*" capture="environment" style="display:none">
+    : `<input type="file" id="m-photofile" accept="image/*" style="display:none">
        <div class="inforow">
          <button class="btn small ghost" id="m-addphoto">${ico("camera")} Priložiť účtenku</button>
          <span class="info"><button type="button" class="info-ico" aria-label="Načo je toto tlačidlo?">i</button><span class="info-pop">Bez rozpoznávania položiek – len ako pripomienka, čo to bolo.</span></span>
