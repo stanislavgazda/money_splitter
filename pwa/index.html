@@ -102,6 +102,10 @@
   .result{background:#e8f5ee; border-radius:12px; padding:12px; margin-top:12px;}
   .result div{padding:3px 0;}
   .spacer{height:10px;}
+  .photorow{display:flex; gap:12px; align-items:center;}
+  .thumb{width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid var(--line); flex:none;}
+  .hist .note{color:var(--text); font-style:italic;}
+  .hist a.sub{color:var(--green-dark); text-decoration:none; display:inline-block; margin-top:2px;}
 </style>
 </head>
 <body>
@@ -131,7 +135,9 @@ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
 const DEFAULT_SYNC_URL = "https://script.google.com/macros/s/AKfycbz0AfCGqU27goiraoFc0Q-Ea8N7mh0821J3jyKhUSZnXpjxqGUw9xtUGVKwfTVweKLY/exec";
 
 function loadLS(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
-function saveLS(k,v){ localStorage.setItem(k,JSON.stringify(v)); }
+/* Returns false when the browser quota is full – a queued receipt photo is the
+   only payload big enough to hit it, and the caller warns instead of dying. */
+function saveLS(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
 function defaultSettings(){
   return {
     currency:"€", syncUrl:DEFAULT_SYNC_URL, updatedAt:0,
@@ -211,7 +217,10 @@ function askPass(msg){
 function applyQueue(list){
   let out = list.slice();
   for(const q of queue){
-    if(q.action==="add") out.push(q.entry);
+    if(q.action==="add"){
+      const {photoB64, photoMime, ...rest} = q.entry; // base64 never enters the local ledger
+      out.push(rest);
+    }
     else if(q.action==="delete") out = out.filter(e=>e.id!==q.id);
   }
   return out;
@@ -254,10 +263,21 @@ async function sendOrQueue(body){
     if(!res.ok) throw new Error(res.error||"failed");
     setBadge("ok");
   }catch(e){
-    queue.push(body); saveLS("ms_queue",queue); setBadge("off");
+    queue.push(body);
+    if(!saveLS("ms_queue",queue) && body.entry && body.entry.photoB64){
+      delete body.entry.photoB64; delete body.entry.photoMime;
+      saveLS("ms_queue",queue);
+      alert("Málo miesta v prehliadači – záznam sa uloží, ale účtenka sa nepriloží.");
+    }
+    setBadge("off");
   }
 }
-function pushEntry(entry){ ledger.push(entry); saveLedger(); sendOrQueue({action:"add", entry}); }
+/* The local ledger keeps the small entry; only the outgoing copy carries the
+   photo. The server answers with photoId/photoUrl on the next sync. */
+function pushEntry(entry, photo){
+  ledger.push(entry); saveLedger();
+  sendOrQueue({action:"add", entry: photo ? Object.assign({}, entry, photo) : entry});
+}
 function deleteEntry(id){ ledger = ledger.filter(e=>e.id!==id); saveLedger(); sendOrQueue({action:"delete", id}); }
 
 /* ---------- balance math ---------- */
@@ -294,32 +314,47 @@ function newMealState(){
   // mode: "portions" = odhad podľa porcií a cien, "sums" = konkrétne sumy z účtu,
   //       "scan" = naskenovaný účet s priradením položiek rodinám
   return {date:today(), payer:S.families[0]||"", mode:"portions", sel:new Set(), custom:[], portions, amounts, override:"",
-          items:null, scanTotal:null, scanBusy:false};
+          items:null, scanTotal:null, scanBusy:false, note:"", photo:null};
 }
 
-/* ---------- bill scan helpers ---------- */
-function fileToResizedBase64(file, cb){
+/* ---------- bill scan & photo helpers ----------
+   Vracia dve veľkosti: b64 na odoslanie a malý preview do náhľadu. Náhľad musí
+   byť malý – v režime skenu sa formulár prekresľuje pri každom ťuknutí. */
+function processPhoto(file, cb, maxDim, quality){
   const img=new Image();
   img.onload=()=>{
-    const maxDim=1600;
-    const sc=Math.min(1, maxDim/Math.max(img.width,img.height));
-    const w=Math.round(img.width*sc), h=Math.round(img.height*sc);
-    const c=document.createElement("canvas"); c.width=w; c.height=h;
-    c.getContext("2d").drawImage(img,0,0,w,h);
+    const encode=(dim,q)=>{
+      const sc=Math.min(1, dim/Math.max(img.width,img.height));
+      const w=Math.round(img.width*sc), h=Math.round(img.height*sc);
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      return c.toDataURL("image/jpeg",q);
+    };
+    const full=encode(maxDim||1600, quality||0.85);
+    const preview=encode(200,0.6);
     URL.revokeObjectURL(img.src);
-    cb(c.toDataURL("image/jpeg",0.85).split(",")[1]);
+    cb(full.split(",")[1], preview);
   };
   img.onerror=()=>{ URL.revokeObjectURL(img.src); alert("Obrázok sa nepodarilo načítať."); meal.scanBusy=false; renderMeal(); };
   img.src=URL.createObjectURL(file);
 }
+/* Priloženie bez skenovania: menší obrázok, aby sa zmestil do fronty pri
+   offline uložení. */
+function attachPhoto(file){
+  processPhoto(file, (b64,preview)=>{
+    meal.photo={b64, mime:"image/jpeg", preview};
+    renderMeal();
+  }, 1200, 0.7);
+}
 function scanBillImage(file){
   meal.scanBusy=true; renderMeal();
-  fileToResizedBase64(file, async b64=>{
+  processPhoto(file, async (b64,preview)=>{
     try{
       const res=await apiPost({action:"scanBill", image:b64, mime:"image/jpeg"});
       if(!res.ok) throw new Error(res.error||"skenovanie zlyhalo");
       meal.items=(res.items||[]).map(it=>({name:it.name, price:it.price, fam:null}));
       meal.scanTotal=res.total;
+      meal.photo={b64, mime:"image/jpeg", preview}; // naskenovaný účet sa rovno priloží
     }catch(e){
       alert("Skenovanie zlyhalo: "+e.message);
     }
@@ -435,6 +470,27 @@ function renderMeal(){
     <div class="summary" id="m-summary"></div>
   </div>` : ""}`;
 
+  /* Poznámka + účtenka – rovnaké pre všetky tri režimy */
+  const notePhotoUI = `
+  <div class="card">
+    <h2>Poznámka a účtenka</h2>
+    <label>Za čo to bolo?</label>
+    <input id="m-note" placeholder="napr. nedeľný obed, nákup v Lidli" value="${esc(meal.note)}">
+    <div class="spacer"></div>
+    ${meal.photo ? `
+      <div class="photorow">
+        <img class="thumb" src="${meal.photo.preview}" alt="účtenka">
+        <div>
+          <div class="muted">Účtenka priložená ✓</div>
+          <button class="btn small danger" id="m-delphoto">Odstrániť</button>
+        </div>
+      </div>`
+    : meal.mode==="scan" ? `<div class="muted">Odfotená účtenka sa priloží automaticky.</div>`
+    : `<input type="file" id="m-photofile" accept="image/*" capture="environment" style="display:none">
+       <button class="btn small ghost" id="m-addphoto">📷 Priložiť účtenku</button>
+       <div class="muted" style="margin-top:6px">Bez rozpoznávania položiek – len ako pripomienka, čo to bolo.</div>`}
+  </div>`;
+
   el.innerHTML = `
   <div class="card">
     <div class="row">
@@ -451,8 +507,18 @@ function renderMeal(){
     </div>
   </div>
   ${meal.mode==="sums" ? sumsUI : meal.mode==="scan" ? scanUI : portionsUI}
+  ${notePhotoUI}
   <button class="btn" id="m-save">Vypočítať a uložiť</button>
   <div id="m-result"></div>`;
+
+  $("#m-note").oninput = e=>{ meal.note=e.target.value; };
+  const addPhotoBtn=$("#m-addphoto");
+  if(addPhotoBtn){
+    addPhotoBtn.onclick = ()=> $("#m-photofile").click();
+    $("#m-photofile").onchange = e=>{ const f=e.target.files[0]; if(f) attachPhoto(f); };
+  }
+  const delPhotoBtn=$("#m-delphoto");
+  if(delPhotoBtn) delPhotoBtn.onclick = ()=>{ meal.photo=null; renderMeal(); };
 
   $("#m-date").onchange = e=>{ meal.date=e.target.value; };
   $("#m-payer").onchange = e=>{ meal.payer=e.target.value; updateSummary(); };
@@ -620,9 +686,12 @@ function saveMeal(){
     shares:c.shares
   };
   if(meal.mode==="scan") entry.items = meal.items.map(it=>({name:it.name, price:it.price, fam:it.fam}));
-  pushEntry(entry);
+  if(meal.note.trim()) entry.note = meal.note.trim();
+  pushEntry(entry, meal.photo ? {photoB64:meal.photo.b64, photoMime:meal.photo.mime} : null);
   const owes=Object.keys(c.shares).filter(f=>f!==meal.payer);
   const html = `<div class="result"><b>Uložené ✓</b>
+    ${entry.note?`<div>📝 ${esc(entry.note)}</div>`:""}
+    ${meal.photo?"<div>📷 Účtenka sa ukladá…</div>":""}
     ${owes.map(f=>`<div>${esc(f)} platí ${esc(meal.payer)} <b>${fmt(c.shares[f])}</b></div>`).join("")||"<div>Nič sa nedlží – platiteľ jedol sám.</div>"}
   </div>`;
   meal=newMealState(); renderMeal();
@@ -630,6 +699,10 @@ function saveMeal(){
 }
 
 /* ---------- balances tab ---------- */
+function histExtras(e){
+  return (e.note?`<div class="sub note">📝 ${esc(e.note)}</div>`:"")
+    + (e.photoUrl?`<a class="sub" href="${esc(e.photoUrl)}" target="_blank" rel="noopener">📷 Zobraziť účtenku</a>`:"");
+}
 function renderBalances(){
   const pairs=computeBalances();
   const hist=ledger.slice().sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.id>a.id?1:-1));
@@ -651,10 +724,12 @@ function renderBalances(){
         <div class="sub">${esc(e.date||"")} · ${(e.mode==="sums"||e.mode==="scan")
           ? Object.entries(e.shares||{}).map(([f,v])=>esc(f)+": "+fmt(v)).join(", ")
           : Object.entries(e.portions||{}).map(([f,v])=>esc(f)+": "+v).join(", ")}</div>
+        ${histExtras(e)}
       </div><button class="x" data-del="${e.id}">✕</button></div>` : `
       <div class="hist"><div>
         <div>💸 <b>${esc(e.from)}</b> zaplatil(a) <b>${esc(e.to)}</b> ${fmt(e.amount)}</div>
         <div class="sub">${esc(e.date||"")} · vyrovnanie</div>
+        ${histExtras(e)}
       </div><button class="x" data-del="${e.id}">✕</button></div>`).join("") || '<div class="muted">Zatiaľ žiadne jedlá.</div>'}
   </div>`;
   $("#tab-balances").onclick = e=>{
@@ -665,7 +740,10 @@ function renderBalances(){
       if(v===null) return;
       const amt=parseFloat(v);
       if(isNaN(amt)||amt<=0){ alert("Neplatná suma"); return; }
-      pushEntry({id:uid(), kind:"settlement", date:today(), from:p.from, to:p.to, amount:round2(amt)});
+      const n=prompt("Poznámka k platbe (voliteľné):","");
+      const st={id:uid(), kind:"settlement", date:today(), from:p.from, to:p.to, amount:round2(amt)};
+      if(n && n.trim()) st.note=n.trim();
+      pushEntry(st);
       renderBalances(); return;
     }
     const d=e.target.closest("[data-del]");
