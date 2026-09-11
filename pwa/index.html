@@ -313,7 +313,7 @@ function newMealState(){
   const amounts={};  S.families.forEach(f=>amounts[f]=0);
   // mode: "portions" = odhad podľa porcií a cien, "sums" = konkrétne sumy z účtu,
   //       "scan" = naskenovaný účet s priradením položiek rodinám
-  return {date:today(), payer:S.families[0]||"", mode:"portions", sel:new Set(), custom:[], portions, amounts, override:"",
+  return {date:today(), payer:"", mode:"portions", sel:new Set(), custom:[], portions, amounts, override:"",
           items:null, scanTotal:null, scanBusy:false, note:"", photo:null};
 }
 
@@ -495,7 +495,10 @@ function renderMeal(){
   <div class="card">
     <div class="row">
       <div><label>Dátum</label><input type="date" id="m-date" value="${meal.date}"></div>
-      <div><label>Kto platil / varil?</label><select id="m-payer">${S.families.map(f=>`<option ${f===meal.payer?"selected":""}>${esc(f)}</option>`).join("")}</select></div>
+      <div><label>Kto platil / varil?</label><select id="m-payer">
+        <option value="" ${meal.payer?"":"selected"} disabled>Vyberte…</option>
+        ${S.families.map(f=>`<option ${f===meal.payer?"selected":""}>${esc(f)}</option>`).join("")}
+      </select></div>
     </div>
   </div>
   <div class="card">
@@ -641,8 +644,10 @@ function mealCalc(){
 function updateSummary(){
   const box=$("#m-summary"); if(!box) return; // v režime skenu bez položiek sa súhrn nezobrazuje
   const c=mealCalc();
-  const owes = Object.keys(c.shares).filter(f=>f!==meal.payer)
-    .map(f=>`<div>${esc(f)} → ${esc(meal.payer)}: <b>${fmt(c.shares[f])}</b></div>`).join("");
+  const owes = meal.payer
+    ? Object.keys(c.shares).filter(f=>f!==meal.payer)
+        .map(f=>`<div>${esc(f)} → ${esc(meal.payer)}: <b>${fmt(c.shares[f])}</b></div>`).join("")
+    : '<div class="muted">Vyberte, kto platil / varil.</div>';
   if(meal.mode==="scan"){
     const mismatch = meal.scanTotal!=null && !c.unassigned && Math.abs(meal.scanTotal-c.total)>0.011;
     box.innerHTML = `
@@ -665,6 +670,7 @@ function updateSummary(){
     ${owes || '<div class="muted">Pridaj porcie, aby si videl, kto koľko dlží.</div>'}`;
 }
 function saveMeal(){
+  if(!meal.payer){ alert("Vyberte, kto platil / varil."); return; }
   const c=mealCalc();
   if(meal.mode==="scan"){
     if(!meal.items||!meal.items.length){ alert("Najprv naskenujte účet."); return; }
