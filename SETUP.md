@@ -1,6 +1,6 @@
 # Money Splitter – Setup
 
-Two parts: a Google Sheet (shared database) and `money-splitter.html` (the app). One-time setup ≈ 10 minutes.
+Two parts: a Google Sheet (shared database) and the app in `pwa/`. One-time setup ≈ 10 minutes.
 
 ## 1. Create the Google Sheet backend
 
@@ -19,15 +19,13 @@ Two parts: a Google Sheet (shared database) and `money-splitter.html` (the app).
 
 ## 2. Connect the app
 
-1. Open `money-splitter.html` in a browser.
+1. Open the app (the URL from GitHub Pages – see step 3 below, or `pwa/index.html` directly).
 2. Go to **Settings → Google Sheet sync**, paste the URL, tap **Save & test connection**.
 3. You should see "✓ Connected". Every saved meal now appears as a row in the Sheet, and all devices using the same URL share balances.
 
 ## 3. Put it on phones
 
-Option A – simplest: send `money-splitter.html` to each person (email/WhatsApp), open it, and use the browser's **Add to Home screen**. Each person pastes the same sync URL once in Settings.
-
-Option B – host it: put the file on any static hosting (e.g. GitHub Pages) and share the link. Same result, easier updates.
+The app is already hosted on GitHub Pages (deploys automatically from `main` – see `DEPLOYMENT.md`). Send that link to each person; they open it and use the browser's **Add to Home screen**. Each person pastes the same sync URL once in Settings.
 
 ## 4. Daily use
 

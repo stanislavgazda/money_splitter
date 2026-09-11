@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2e7d5b">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1411" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,98 +16,171 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root{
-    --green:#2e7d5b; --green-dark:#206045; --bg:#f4f6f5; --card:#ffffff;
-    --text:#1d2b25; --muted:#68786f; --line:#dde5e0; --red:#c0442f; --amber:#b07908;
+    /* green plays three separate roles; they diverge in dark mode, so they are
+       separate tokens: a fill, its pressed state, and a readable text colour */
+    --green:#2e7d5b; --green-press:#206045; --green-ink:#206045; --green-soft:#eaf3ee;
+    --bg:#f5f7f6; --card:#ffffff; --field:#ffffff;
+    --text:#16211c; --muted:#65736a; --line:#e3e9e5;
+    --red:#c0442f; --red-soft:#fbeae7; --amber:#b07908; --amber-soft:#fdecc8;
+    --pop-bg:#16211c; --pop-fg:#ffffff; --focus:rgba(46,125,91,.13); --on-green:#ffffff;
+    /* One type scale for the whole app. Inputs stay at 16px on purpose: iOS
+       Safari zooms the page when focusing anything smaller. */
+    --fs-xs:.75rem;     /* 12 – tab bar, badge */
+    --fs-sm:.8125rem;   /* 13 – sub-labels, hints, popups */
+    --fs-md:.875rem;    /* 14 – secondary body, chips, history */
+    --fs-base:.9375rem; /* 15 – body */
+    --fs-input:1rem;    /* 16 – form fields only */
+    --fs-lg:1.0625rem;  /* 17 – primary action, page title */
+    --fs-xl:1.75rem;    /* 28 – the running total */
+    --r-sm:10px; --r-md:14px; --r-full:999px;
+  }
+  /* Follows the phone's own setting, so nobody gets a surprise. Only the colour
+     tokens are redefined – every rule above is written against them. */
+  @media (prefers-color-scheme: dark){
+    :root{
+      --green:#5fbb8e; --green-press:#4da87c; --green-ink:#6fc79c; --green-soft:#1b2b23;
+      --bg:#0f1411; --card:#161c19; --field:#1b221e;
+      --text:#e6ebe8; --muted:#93a39b; --line:#27302b;
+      --red:#e8705c; --red-soft:#2e1d19; --amber:#d9a441; --amber-soft:#2d2415;
+      --pop-bg:#e6ebe8; --pop-fg:#0f1411; --focus:rgba(95,187,142,.25); --on-green:#0d1512;
+    }
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0;}
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--bg); color:var(--text); font-size:16px;
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); font-size:var(--fs-base);
+    line-height:1.45; -webkit-font-smoothing:antialiased;
     padding-bottom:76px;
   }
+  /* money should line up in columns wherever it is shown */
+  .amt,.big,.val,.owe,.hist,.result,.summary{font-variant-numeric:tabular-nums;}
+  /* neutral chrome, green reserved for actions and active state */
   header{
-    background:var(--green); color:#fff; padding:14px 16px;
+    background:var(--card); color:var(--text); padding:13px 16px;
+    border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center;
     position:sticky; top:0; z-index:10;
   }
-  header h1{font-size:1.15rem; margin:0; font-weight:600;}
+  header h1{font-size:var(--fs-lg); margin:0; font-weight:650; letter-spacing:-.015em;}
   #badge{
-    font-size:.75rem; padding:4px 10px; border-radius:999px; cursor:pointer;
-    background:rgba(255,255,255,.18); color:#fff; border:none;
+    font-size:var(--fs-xs); padding:5px 11px; border-radius:var(--r-full); cursor:pointer;
+    background:var(--bg); color:var(--muted); border:1px solid var(--line);
+    display:inline-flex; align-items:center; gap:5px; font-family:inherit;
+    transition:background-color .15s ease, color .15s ease;
   }
-  #badge.ok{background:#e8f5ee; color:var(--green-dark);}
-  #badge.off{background:#fdecc8; color:var(--amber);}
+  #badge.ok{background:var(--green-soft); color:var(--green-ink);}
+  #badge.off{background:var(--amber-soft); color:var(--amber);}
   main{padding:14px; max-width:560px; margin:0 auto;}
-  .card{background:var(--card); border-radius:14px; padding:14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.06);}
-  .card h2{font-size:.95rem; margin:0 0 10px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em;}
-  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
-  input,select{
-    font-size:1rem; padding:10px; border:1px solid var(--line); border-radius:10px;
-    width:100%; background:#fff; color:var(--text);
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:16px; margin-bottom:12px;
   }
-  input:focus,select:focus{outline:2px solid var(--green); border-color:transparent;}
+  .card h2{
+    font-size:var(--fs-md); margin:0 0 12px; color:var(--muted); font-weight:600;
+    letter-spacing:0;
+  }
+  label{font-size:var(--fs-sm); color:var(--muted); display:block; margin-bottom:5px;}
+  input,select{
+    font-size:var(--fs-input); padding:11px 12px; border:1px solid var(--line);
+    border-radius:var(--r-sm); width:100%; background:var(--field); color:var(--text);
+    font-family:inherit; transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  /* the field itself must stay 16px, but its placeholder is a hint, not content */
+  input::placeholder,textarea::placeholder{font-size:var(--fs-md); color:var(--muted); opacity:.75;}
+  input:focus,select:focus{
+    outline:none; border-color:var(--green); box-shadow:0 0 0 3px var(--focus);
+  }
   .row{display:flex; gap:10px;}
   .row>*{flex:1;}
   .chips{display:flex; flex-wrap:wrap; gap:8px;}
   .chip{
-    border:1.5px solid var(--line); background:#fff; border-radius:999px;
-    padding:9px 14px; font-size:.92rem; cursor:pointer; color:var(--text);
+    border:1px solid var(--line); background:var(--field); border-radius:var(--r-full);
+    padding:9px 14px; font-size:var(--fs-md); cursor:pointer; color:var(--text);
+    font-family:inherit; transition:background-color .15s ease, border-color .15s ease, color .15s ease;
   }
-  .chip.on{background:var(--green); border-color:var(--green); color:#fff;}
-  .chip .p{opacity:.75; font-size:.82rem;}
-  .chip.sm{padding:5px 10px; font-size:.8rem;}
+  .chip.on{background:var(--green); border-color:var(--green); color:var(--on-green);}
+  .chip .p{opacity:.7; font-size:var(--fs-sm);}
+  .chip.sm{padding:5px 11px; font-size:var(--fs-sm);}
   .scanitem{padding:8px 0; border-bottom:1px solid var(--line);}
   .scanitem:last-child{border-bottom:none;}
   .si-top{display:flex; justify-content:space-between; gap:8px; align-items:center;}
   .scanitem .chips{margin-top:6px;}
   .stepper{display:flex; align-items:center; gap:8px;}
   .stepper button{
-    width:42px; height:42px; border-radius:12px; border:1px solid var(--line);
-    background:#fff; font-size:1.3rem; cursor:pointer; color:var(--green-dark); flex:none;
+    width:40px; height:40px; border-radius:var(--r-sm); border:1px solid var(--line);
+    background:var(--field); font-size:1.15rem; cursor:pointer; color:var(--green-ink); flex:none;
+    font-family:inherit; transition:background-color .15s ease, border-color .15s ease;
   }
-  .stepper .val{min-width:44px; text-align:center; font-weight:600; font-size:1.05rem;}
+  .stepper button:active{background:var(--green-soft); border-color:var(--green);}
+  .stepper .val{min-width:46px; text-align:center; font-weight:600; font-size:var(--fs-base);}
   .famrow{display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--line);}
   .famrow:last-child{border-bottom:none;}
   .btn{
-    display:block; width:100%; padding:14px; border:none; border-radius:12px;
-    background:var(--green); color:#fff; font-size:1.05rem; font-weight:600; cursor:pointer;
+    display:block; width:100%; padding:14px; border:none; border-radius:var(--r-sm);
+    background:var(--green); color:var(--on-green); font-size:var(--fs-lg); font-weight:600; cursor:pointer;
+    font-family:inherit; letter-spacing:-.01em; transition:background-color .15s ease;
   }
-  .btn:active{background:var(--green-dark);}
-  .btn.small{width:auto; padding:8px 14px; font-size:.88rem; display:inline-block;}
-  .btn.ghost{background:#eef3f0; color:var(--green-dark);}
-  .btn.danger{background:#fbeae7; color:var(--red);}
-  .summary{font-size:.95rem;}
-  .summary .big{font-size:1.5rem; font-weight:700; color:var(--green-dark);}
+  .btn:active{background:var(--green-press);}
+  .btn.small{width:auto; padding:9px 14px; font-size:var(--fs-md); display:inline-flex; align-items:center; gap:6px;}
+  .btn.ghost{background:var(--green-soft); color:var(--green-ink);}
+  .btn.danger{background:var(--red-soft); color:var(--red);}
+  .summary{font-size:var(--fs-base);}
+  .summary .big{font-size:var(--fs-xl); font-weight:650; color:var(--text); letter-spacing:-.02em; line-height:1.2;}
   .owe{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); gap:8px;}
   .owe:last-child{border-bottom:none;}
-  .owe .amt{font-weight:700; color:var(--green-dark); white-space:nowrap;}
-  .hist{font-size:.9rem; padding:9px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; align-items:center;}
+  .owe .amt{font-weight:700; color:var(--green-ink); white-space:nowrap;}
+  .hist{font-size:var(--fs-md); padding:10px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; align-items:center;}
   .hist:last-child{border-bottom:none;}
-  .hist .sub{color:var(--muted); font-size:.8rem;}
-  .x{border:none; background:none; color:var(--red); font-size:1.1rem; cursor:pointer; padding:4px 8px; flex:none;}
-  .muted{color:var(--muted); font-size:.88rem;}
+  .hist .sub{color:var(--muted); font-size:var(--fs-sm);}
+  .x{border:none; background:none; color:var(--red); font-size:var(--fs-lg); cursor:pointer; padding:4px 8px; flex:none;
+     display:inline-flex; align-items:center;}
+  .muted{color:var(--muted); font-size:var(--fs-md);}
   .listrow{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
   .listrow input{flex:1;}
   .listrow input.price{max-width:90px;}
   nav{
     position:fixed; bottom:0; left:0; right:0; display:flex; z-index:10;
-    background:#fff; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom);
+    background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom);
   }
   nav button{
-    flex:1; border:none; background:none; padding:12px 0 10px; font-size:.82rem;
-    color:var(--muted); cursor:pointer;
+    flex:1; border:none; background:none; padding:10px 0 8px; font-size:var(--fs-xs);
+    color:var(--muted); cursor:pointer; font-family:inherit;
+    transition:color .15s ease;
   }
-  nav button.on{color:var(--green-dark); font-weight:700;}
-  nav button .ico{display:block; font-size:1.25rem; margin-bottom:2px;}
-  textarea{width:100%; min-height:90px; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:.85rem;}
-  .result{background:#e8f5ee; border-radius:12px; padding:12px; margin-top:12px;}
+  nav button.on{color:var(--green-ink); font-weight:600;}
+  nav button .ico{display:block; margin-bottom:3px;}
+  nav button .ico .i{width:21px; height:21px;}
+  textarea{width:100%; min-height:90px; border:1px solid var(--line); border-radius:var(--r-sm); padding:11px 12px; font-size:var(--fs-md); font-family:inherit;}
+  .result{background:var(--green-soft); border-radius:var(--r-sm); padding:13px; margin-top:12px; font-size:var(--fs-md);}
   .result div{padding:3px 0;}
   .spacer{height:10px;}
   .photorow{display:flex; gap:12px; align-items:center;}
   .thumb{width:72px; height:72px; object-fit:cover; border-radius:10px; border:1px solid var(--line); flex:none;}
   .hist .note{color:var(--text); font-style:italic;}
-  .hist a.sub{color:var(--green-dark); text-decoration:none; display:inline-block; margin-top:2px;}
+  .hist a.sub{color:var(--green-ink); text-decoration:none; display:inline-block; margin-top:2px;}
+  /* The (i) popup spans its row (heading or button row) rather than hanging off
+     the icon, so it can never run past the card – and therefore never off screen. */
+  .card h2.ttl, .inforow{display:flex; justify-content:space-between; align-items:center; gap:8px; position:relative;}
+  .inforow{margin-top:6px;}
+  .info{display:inline-block; text-transform:none;}
+  .info-ico{
+    width:18px; height:18px; border-radius:50%; border:1.5px solid var(--muted); background:var(--field);
+    color:var(--muted); font:italic 700 .72rem/1 Georgia,serif; letter-spacing:0;
+    cursor:pointer; padding:0; display:inline-flex; align-items:center; justify-content:center;
+    vertical-align:middle; flex:none;
+  }
+  .info-pop{
+    display:none; position:absolute; top:100%; left:0; right:0; z-index:20; margin-top:6px;
+    background:var(--pop-bg); color:var(--pop-fg); font-size:var(--fs-sm); font-weight:400; text-transform:none;
+    letter-spacing:normal; line-height:1.45; border-radius:var(--r-sm); padding:11px 13px;
+    box-shadow:0 6px 20px rgba(0,0,0,.16);
+  }
+  .info-pop.show{display:block;}
+  /* inline icon set – monochrome, inherits the surrounding text colour */
+  .i{width:1.05em; height:1.05em; flex:none; vertical-align:-.16em;}
+  .spin{animation:spin 1s linear infinite; transform-origin:50% 50%;}
+  @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -119,9 +194,9 @@
   <div id="tab-settings" style="display:none"></div>
 </main>
 <nav>
-  <button data-tab="meal" class="on"><span class="ico">🍲</span>Nové jedlo</button>
-  <button data-tab="balances"><span class="ico">⚖️</span>Zostatky</button>
-  <button data-tab="settings"><span class="ico">⚙️</span>Nastavenia</button>
+  <button data-tab="meal" class="on"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>Nová položka</button>
+  <button data-tab="balances"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg></span>Zostatky</button>
+  <button data-tab="settings"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg></span>Nastavenia</button>
 </nav>
 <script>
 "use strict";
@@ -163,6 +238,24 @@ let queue  = loadLS("ms_queue", []);
 let currentTab = "meal";
 let meal = null; // current meal form state
 
+/* ---------- icons ----------
+   Inline SVG (no icon font / CDN): the app must keep working offline, and
+   stroke="currentColor" keeps every icon monochrome with its surrounding text. */
+const ICONS = {
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+  note:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  checkCircle:'<path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  alert:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  banknote:'<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/>',
+  spinner:'<path d="M12 3a9 9 0 1 0 9 9" />'
+};
+function ico(name, cls){
+  return `<svg class="i ${cls||""}" viewBox="0 0 24 24" fill="none" stroke="currentColor"`
+    + ` stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
 const $  = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const round2 = n => Math.round(n*100)/100;
@@ -195,8 +288,8 @@ function saveLedger(){ saveLS("ms_ledger",ledger); }
 function setBadge(mode){
   const b = $("#badge");
   if(mode==="local"){ b.textContent="Len lokálne"; b.className=""; }
-  else if(mode==="sync"){ b.textContent="Synchronizuje sa…"; b.className=""; }
-  else if(mode==="ok"){ b.textContent="✓ Synchronizované"; b.className="ok"; }
+  else if(mode==="sync"){ b.innerHTML=ico("spinner","spin")+"Synchronizuje sa…"; b.className=""; }
+  else if(mode==="ok"){ b.innerHTML=ico("check")+"Synchronizované"; b.className="ok"; }
   else { b.textContent="Offline ("+queue.length+" čaká)"; b.className="off"; }
 }
 async function apiGet(){
@@ -219,14 +312,26 @@ function applyQueue(list){
   for(const q of queue){
     if(q.action==="add"){
       const {photoB64, photoMime, ...rest} = q.entry; // base64 never enters the local ledger
-      out.push(rest);
+      // a queued entry can already be on the server (its reply was lost), so
+      // don't show it twice while the queue drains
+      if(!out.some(e=>e.id===rest.id)) out.push(rest);
     }
     else if(q.action==="delete") out = out.filter(e=>e.id!==q.id);
   }
   return out;
 }
 let passRetried = false;
+let syncing = false;
+/* syncNow fires from four places (load, the online event, the badge, opening
+   Zostatky). Two overlapping runs would both read queue[0] and both POST it
+   before either shifted it off, writing the same entry twice. */
 async function syncNow(){
+  if(syncing) return;
+  syncing = true;
+  try{ await syncRun(); }
+  finally{ syncing = false; }
+}
+async function syncRun(){
   if(!S.syncUrl){ setBadge("local"); return; }
   if(!PASS && !askPass()){ setBadge("off"); return; }
   setBadge("sync");
@@ -250,7 +355,8 @@ async function syncNow(){
   }catch(e){
     if(/unauthorized/i.test(String(e.message)) && !passRetried){
       passRetried = true;
-      if(askPass("Nesprávne heslo. Zadajte rodinné heslo:")) return syncNow();
+      if(askPass("Nesprávne heslo. Zadajte rodinné heslo:")) return syncRun(); // not syncNow: the mutex is held
+
     }
     setBadge("off");
   }
@@ -386,16 +492,16 @@ function renderMeal(){
   /* UI pre režim "Na porcie" (pôvodné správanie) */
   const portionsUI = `
   <div class="card">
-    <h2>Čo sa podávalo? (na osobu)</h2>
+    <h2>Položky (na osobu)</h2>
     <div class="chips" id="m-chips">
       ${S.components.map((c,i)=>`<button class="chip ${meal.sel.has(i)?"on":""}" data-i="${i}">${esc(c.name)} <span class="p">${fmt(c.price)}</span></button>`).join("")}
-      ${meal.custom.map((c,i)=>`<button class="chip on" data-c="${i}">${esc(c.name)} <span class="p">${fmt(c.price)} ✕</span></button>`).join("")}
+      ${meal.custom.map((c,i)=>`<button class="chip on" data-c="${i}">${esc(c.name)} <span class="p">${fmt(c.price)} ${ico("x")}</span></button>`).join("")}
     </div>
     <div class="spacer"></div>
     <button class="btn small ghost" id="m-addcustom">+ Vlastná položka</button>
   </div>
   <div class="card">
-    <h2>Porcie zjedené na rodinu</h2>
+    <h2 class="ttl">Porcie na rodinu <span class="info"><button type="button" class="info-ico" aria-label="Koľko je porcia?">i</button><span class="info-pop">Dieťa = 0,5 porcie</span></span></h2>
     <div id="m-portions">
       ${S.families.map(f=>`
         <div class="famrow"><span>${esc(f)}</span>
@@ -406,7 +512,6 @@ function renderMeal(){
           </span>
         </div>`).join("")}
     </div>
-    <div class="muted">Tip: dieťa = 0,5 porcie</div>
   </div>
   <div class="card">
     <h2>Celkom</h2>
@@ -419,7 +524,7 @@ function renderMeal(){
   /* UI pre režim "Konkrétne sumy" – jedna suma na rodinu, + pripočíta, − odpočíta */
   const sumsUI = `
   <div class="card">
-    <h2>Sumy na rodinu</h2>
+    <h2 class="ttl">Sumy na rodinu <span class="info"><button type="button" class="info-ico" aria-label="Čo znamenajú + a −?">i</button><span class="info-pop">+ pripočíta ďalšiu položku z účtu (napr. nápoj 2 €), − odpočíta pri omyle. Na rodinu je stále len jedno výsledné číslo.</span></span></h2>
     <div id="m-amounts">
       ${S.families.map(f=>`
         <div class="famrow"><span>${esc(f)}</span>
@@ -430,7 +535,6 @@ function renderMeal(){
           </span>
         </div>`).join("")}
     </div>
-    <div class="muted">+ pripočíta ďalšiu položku z účtu (napr. nápoj 2 €), − odpočíta pri omyle. Na rodinu je stále len jedno výsledné číslo.</div>
   </div>
   <div class="card">
     <h2>Spolu za účet</h2>
@@ -441,21 +545,21 @@ function renderMeal(){
   const scanUI = `
   <div class="card">
     <h2>Sken účtu</h2>
-    ${meal.scanBusy ? `<div class="muted">⏳ Analyzujem účet… (zvyčajne do 15 s)</div>` : `
+    ${meal.scanBusy ? `<div class="muted">${ico("spinner","spin")} Analyzujem účet… (zvyčajne do 15 s)</div>` : `
       <input type="file" id="m-billfile" accept="image/*" capture="environment" style="display:none">
-      <button class="btn small" id="m-scanbtn">📷 ${meal.items ? "Skenovať znova (nahradí položky)" : "Odfotiť / vybrať účet"}</button>
+      <button class="btn small" id="m-scanbtn">${ico("camera")} ${meal.items ? "Skenovať znova (nahradí položky)" : "Odfotiť / vybrať účet"}</button>
       ${meal.items ? `<button class="btn small ghost" id="m-additem">+ Pridať položku ručne</button>` : ""}
     `}
   </div>
   ${meal.items ? `
   <div class="card">
-    <h2>Položky (${meal.items.length})</h2>
+    <h2 class="ttl">Položky (${meal.items.length}) <span class="info"><button type="button" class="info-ico" aria-label="Ako priradiť položky?">i</button><span class="info-pop">Ťuknutím na cenu ju opravíš. „Spoločné“ sa rozdelí rovným dielom medzi rodiny, ktoré majú aspoň jednu vlastnú položku.</span></span></h2>
     <div id="m-items">
       ${meal.items.map((it,i)=>`
         <div class="scanitem">
           <div class="si-top">
             <span>${esc(it.name)}</span>
-            <span><b data-editprice="${i}">${fmt(it.price)}</b> <button class="x" data-delitem="${i}">✕</button></span>
+            <span><b data-editprice="${i}">${fmt(it.price)}</b> <button class="x" data-delitem="${i}">${ico("x")}</button></span>
           </div>
           <div class="chips">
             ${S.families.map(f=>`<button class="chip sm ${it.fam===f?"on":""}" data-item="${i}" data-fam="${esc(f)}">${esc(f)}</button>`).join("")}
@@ -463,7 +567,6 @@ function renderMeal(){
           </div>
         </div>`).join("")}
     </div>
-    <div class="muted">Ťuknutím na cenu ju opravíš. „Spoločné“ sa rozdelí rovným dielom medzi rodiny, ktoré majú aspoň jednu vlastnú položku.</div>
   </div>
   <div class="card">
     <h2>Spolu za účet</h2>
@@ -481,14 +584,16 @@ function renderMeal(){
       <div class="photorow">
         <img class="thumb" src="${meal.photo.preview}" alt="účtenka">
         <div>
-          <div class="muted">Účtenka priložená ✓</div>
+          <div class="muted">${ico("check")} Účtenka priložená</div>
           <button class="btn small danger" id="m-delphoto">Odstrániť</button>
         </div>
       </div>`
     : meal.mode==="scan" ? `<div class="muted">Odfotená účtenka sa priloží automaticky.</div>`
     : `<input type="file" id="m-photofile" accept="image/*" capture="environment" style="display:none">
-       <button class="btn small ghost" id="m-addphoto">📷 Priložiť účtenku</button>
-       <div class="muted" style="margin-top:6px">Bez rozpoznávania položiek – len ako pripomienka, čo to bolo.</div>`}
+       <div class="inforow">
+         <button class="btn small ghost" id="m-addphoto">${ico("camera")} Priložiť účtenku</button>
+         <span class="info"><button type="button" class="info-ico" aria-label="Načo je toto tlačidlo?">i</button><span class="info-pop">Bez rozpoznávania položiek – len ako pripomienka, čo to bolo.</span></span>
+       </div>`}
   </div>`;
 
   el.innerHTML = `
@@ -652,8 +757,8 @@ function updateSummary(){
     const mismatch = meal.scanTotal!=null && !c.unassigned && Math.abs(meal.scanTotal-c.total)>0.011;
     box.innerHTML = `
       <div class="big">${fmt(c.total)}</div>
-      ${meal.scanTotal!=null?`<div>Na účte: <b>${fmt(meal.scanTotal)}</b>${mismatch?' <span class="muted">⚠️ nesedí s priradenými položkami</span>':" ✓"}</div>`:""}
-      ${c.unassigned?`<div class="muted">⚠️ Nepriradené položky: ${c.unassigned}</div>`:""}
+      ${meal.scanTotal!=null?`<div>Na účte: <b>${fmt(meal.scanTotal)}</b>${mismatch?` <span class="muted">${ico("alert")} nesedí s priradenými položkami</span>`:" "+ico("check")}</div>`:""}
+      ${c.unassigned?`<div class="muted">${ico("alert")} Nepriradené položky: ${c.unassigned}</div>`:""}
       ${owes || '<div class="muted">Prirad položky rodinám, aby si videl, kto koľko dlží.</div>'}`;
     return;
   }
@@ -695,9 +800,9 @@ function saveMeal(){
   if(meal.note.trim()) entry.note = meal.note.trim();
   pushEntry(entry, meal.photo ? {photoB64:meal.photo.b64, photoMime:meal.photo.mime} : null);
   const owes=Object.keys(c.shares).filter(f=>f!==meal.payer);
-  const html = `<div class="result"><b>Uložené ✓</b>
-    ${entry.note?`<div>📝 ${esc(entry.note)}</div>`:""}
-    ${meal.photo?"<div>📷 Účtenka sa ukladá…</div>":""}
+  const html = `<div class="result"><b>${ico("check")} Uložené</b>
+    ${entry.note?`<div>${ico("note")} ${esc(entry.note)}</div>`:""}
+    ${meal.photo?`<div>${ico("camera")} Účtenka sa ukladá…</div>`:""}
     ${owes.map(f=>`<div>${esc(f)} platí ${esc(meal.payer)} <b>${fmt(c.shares[f])}</b></div>`).join("")||"<div>Nič sa nedlží – platiteľ jedol sám.</div>"}
   </div>`;
   meal=newMealState(); renderMeal();
@@ -706,8 +811,8 @@ function saveMeal(){
 
 /* ---------- balances tab ---------- */
 function histExtras(e){
-  return (e.note?`<div class="sub note">📝 ${esc(e.note)}</div>`:"")
-    + (e.photoUrl?`<a class="sub" href="${esc(e.photoUrl)}" target="_blank" rel="noopener">📷 Zobraziť účtenku</a>`:"");
+  return (e.note?`<div class="sub note">${ico("note")} ${esc(e.note)}</div>`:"")
+    + (e.photoUrl?`<a class="sub" href="${esc(e.photoUrl)}" target="_blank" rel="noopener">${ico("camera")} Zobraziť účtenku</a>`:"");
 }
 function renderBalances(){
   const pairs=computeBalances();
@@ -720,7 +825,7 @@ function renderBalances(){
         <span>${esc(p.from)} → ${esc(p.to)}</span>
         <span class="amt">${fmt(p.amount)}</span>
         <button class="btn small ghost" data-settle="${i}">Vyrovnať</button>
-      </div>`).join("") : '<div class="muted">Všetko vyrovnané 🎉</div>'}
+      </div>`).join("") : `<div class="muted">${ico("checkCircle")} Všetko vyrovnané</div>`}
   </div>
   <div class="card">
     <h2>História (${hist.length})</h2>
@@ -731,12 +836,12 @@ function renderBalances(){
           ? Object.entries(e.shares||{}).map(([f,v])=>esc(f)+": "+fmt(v)).join(", ")
           : Object.entries(e.portions||{}).map(([f,v])=>esc(f)+": "+v).join(", ")}</div>
         ${histExtras(e)}
-      </div><button class="x" data-del="${e.id}">✕</button></div>` : `
+      </div><button class="x" data-del="${e.id}">${ico("x")}</button></div>` : `
       <div class="hist"><div>
-        <div>💸 <b>${esc(e.from)}</b> zaplatil(a) <b>${esc(e.to)}</b> ${fmt(e.amount)}</div>
+        <div>${ico("banknote")} <b>${esc(e.from)}</b> zaplatil(a) <b>${esc(e.to)}</b> ${fmt(e.amount)}</div>
         <div class="sub">${esc(e.date||"")} · vyrovnanie</div>
         ${histExtras(e)}
-      </div><button class="x" data-del="${e.id}">✕</button></div>`).join("") || '<div class="muted">Zatiaľ žiadne jedlá.</div>'}
+      </div><button class="x" data-del="${e.id}">${ico("x")}</button></div>`).join("") || '<div class="muted">Zatiaľ žiadne jedlá.</div>'}
   </div>`;
   $("#tab-balances").onclick = e=>{
     const s=e.target.closest("[data-settle]");
@@ -774,18 +879,17 @@ function renderSettings(){
   <div class="card">
     <h2>Rodiny</h2>
     <div id="s-fams">${S.families.map((f,i)=>`
-      <div class="listrow"><input value="${esc(f)}" data-fam="${i}"><button class="x" data-delfam="${i}">✕</button></div>`).join("")}
+      <div class="listrow"><input value="${esc(f)}" data-fam="${i}"><button class="x" data-delfam="${i}">${ico("x")}</button></div>`).join("")}
     </div>
     <button class="btn small ghost" id="s-addfam">+ Pridať rodinu</button>
   </div>
   <div class="card">
-    <h2>Predvolené ceny na osobu</h2>
-    <div class="muted" style="margin-bottom:8px">Ceny, rodiny a mena sa synchronizujú cez Google Sheet na všetky zariadenia.</div>
+    <h2 class="ttl">Predvolené ceny na osobu <span class="info"><button type="button" class="info-ico" aria-label="Ako sa synchronizujú?">i</button><span class="info-pop">Ceny, rodiny a mena sa synchronizujú cez Google Sheet na všetky zariadenia.</span></span></h2>
     <div id="s-comps">${S.components.map((c,i)=>`
       <div class="listrow">
         <input value="${esc(c.name)}" data-cname="${i}">
         <input class="price" type="number" step="0.1" min="0" value="${c.price}" data-cprice="${i}">
-        <button class="x" data-delcomp="${i}">✕</button>
+        <button class="x" data-delcomp="${i}">${ico("x")}</button>
       </div>`).join("")}
     </div>
     <button class="btn small ghost" id="s-addcomp">+ Pridať položku</button>
@@ -820,9 +924,9 @@ function renderSettings(){
     msg.textContent="Testuje sa…";
     try{
       const res=await apiGet();
-      if(res.ok){ msg.textContent="✓ Pripojené! "+(res.entries||[]).length+" záznamov v hárku."; syncNow(); }
-      else msg.textContent="✗ Skript vrátil chybu: "+(res.error||"neznáma");
-    }catch(e){ msg.textContent="✗ Nepodarilo sa pripojiť. Skontrolujte URL a nasadenie (prístup: Ktokoľvek)."; }
+      if(res.ok){ msg.innerHTML=ico("check")+" Pripojené! "+(res.entries||[]).length+" záznamov v hárku."; syncNow(); }
+      else msg.innerHTML=ico("x")+" Skript vrátil chybu: "+esc(res.error||"neznáma");
+    }catch(e){ msg.innerHTML=ico("alert")+" Nepodarilo sa pripojiť. Skontrolujte URL a nasadenie (prístup: Ktokoľvek)."; }
   };
   $("#tab-settings").onchange = e=>{
     const t=e.target;
@@ -893,6 +997,20 @@ document.querySelector("nav").addEventListener("click", e=>{
   ["meal","balances","settings"].forEach(t=>{ document.getElementById("tab-"+t).style.display = t===currentTab?"":"none"; });
   renderCurrent();
   if(currentTab==="balances") syncNow();
+});
+/* (i) info popups – delegated once here so re-rendering the form (which
+   replaces the DOM) never loses or duplicates the listener. Positioning is
+   pure CSS; the popup spans its row, so there is nothing to measure. */
+document.addEventListener("click", e=>{
+  const btn = e.target.closest(".info-ico");
+  if(btn){
+    const pop = btn.nextElementSibling;
+    const wasOpen = pop.classList.contains("show");
+    document.querySelectorAll(".info-pop.show").forEach(p=>p.classList.remove("show"));
+    if(!wasOpen) pop.classList.add("show");
+    return;
+  }
+  if(!e.target.closest(".info")) document.querySelectorAll(".info-pop.show").forEach(p=>p.classList.remove("show"));
 });
 window.addEventListener("online", syncNow);
 setBadge(S.syncUrl?"sync":"local");

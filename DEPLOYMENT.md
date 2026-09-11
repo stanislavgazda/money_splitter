@@ -9,7 +9,6 @@
 | `pwa/sw.js` | Service worker – offline support + auto-updates |
 | `pwa/icon-192.png`, `pwa/icon-512.png` | App icons |
 | `google-apps-script.gs` | Updated backend (v2) – **must be redeployed** |
-| `money-splitter.html` | Old single-file version (kept as backup) |
 
 ## Step 1 – Update the Apps Script (~3 min)
 

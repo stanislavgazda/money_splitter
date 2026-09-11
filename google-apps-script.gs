@@ -55,6 +55,16 @@ function colIndex_(sh, name) {
   return head.indexOf(name);
 }
 
+/* 1-based sheet row holding this entry id, or -1. */
+function rowOfId_(sh, id) {
+  if (sh.getLastRow() < 2) return -1;
+  var ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) return i + 2;
+  }
+  return -1;
+}
+
 function getSettingsSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(SETTINGS_SHEET);
@@ -137,6 +147,16 @@ function doPost(e) {
     if (body.action === 'add' && body.entry && body.entry.id) {
       migrateColumns_(sh);
       var en = body.entry;
+
+      // Writing an entry is idempotent: the client retries whenever a response
+      // is lost (dropped connection, network switch), and the row may already
+      // have been written by the attempt whose reply never arrived. Answer ok
+      // so the retry clears from the queue instead of piling up more rows.
+      // This must come before the photo upload, or the retry orphans a second
+      // Drive file even though its row is rejected.
+      if (rowOfId_(sh, en.id) > 0) {
+        return json_({ ok: true, duplicate: true });
+      }
 
       // The photo travels as base64 but is never stored in the sheet – it goes
       // to Drive and only its id/url stay in the entry, so syncs stay small.
