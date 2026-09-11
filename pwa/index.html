@@ -163,6 +163,7 @@
      the icon, so it can never run past the card – and therefore never off screen. */
   .card h2.ttl, .inforow{display:flex; justify-content:space-between; align-items:center; gap:8px; position:relative;}
   .inforow{margin-top:6px;}
+  .btnrow{display:flex; flex-wrap:wrap; gap:8px;}
   .info{display:inline-block; text-transform:none;}
   .info-ico{
     width:18px; height:18px; border-radius:50%; border:1.5px solid var(--muted); background:var(--field);
@@ -243,6 +244,7 @@ let meal = null; // current meal form state
    stroke="currentColor" keeps every icon monochrome with its surrounding text. */
 const ICONS = {
   camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+  image:'<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="1.8"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   note:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   checkCircle:'<path d="M21.8 10A10 10 0 1 1 17 3.34"/><path d="m9 11 3 3L22 4"/>',
@@ -546,9 +548,14 @@ function renderMeal(){
   <div class="card">
     <h2>Sken účtu</h2>
     ${meal.scanBusy ? `<div class="muted">${ico("spinner","spin")} Analyzujem účet… (zvyčajne do 15 s)</div>` : `
+      <input type="file" id="m-billcam" accept="image/*" capture="environment" style="display:none">
       <input type="file" id="m-billfile" accept="image/*" style="display:none">
-      <button class="btn small" id="m-scanbtn">${ico("camera")} ${meal.items ? "Skenovať znova (nahradí položky)" : "Odfotiť / vybrať účet"}</button>
-      ${meal.items ? `<button class="btn small ghost" id="m-additem">+ Pridať položku ručne</button>` : ""}
+      <div class="btnrow">
+        <button class="btn small" id="m-scancam">${ico("camera")} Odfotiť</button>
+        <button class="btn small ghost" id="m-scanpick">${ico("image")} Vybrať z galérie</button>
+      </div>
+      ${meal.items ? `<div class="muted" style="margin-top:8px">Nový sken nahradí položky.</div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn small ghost" id="m-additem">+ Pridať položku ručne</button></div>` : ""}
     `}
   </div>
   ${meal.items ? `
@@ -588,10 +595,14 @@ function renderMeal(){
           <button class="btn small danger" id="m-delphoto">Odstrániť</button>
         </div>
       </div>`
-    : meal.mode==="scan" ? `<div class="muted">Odfotená účtenka sa priloží automaticky.</div>`
-    : `<input type="file" id="m-photofile" accept="image/*" style="display:none">
+    : meal.mode==="scan" ? ""
+    : `<input type="file" id="m-photocam" accept="image/*" capture="environment" style="display:none">
+       <input type="file" id="m-photofile" accept="image/*" style="display:none">
        <div class="inforow">
-         <button class="btn small ghost" id="m-addphoto">${ico("camera")} Priložiť účtenku</button>
+         <span class="btnrow">
+           <button class="btn small ghost" id="m-addphotocam">${ico("camera")} Odfotiť</button>
+           <button class="btn small ghost" id="m-addphoto">${ico("image")} Vybrať z galérie</button>
+         </span>
          <span class="info"><button type="button" class="info-ico" aria-label="Načo je toto tlačidlo?">i</button><span class="info-pop">Bez rozpoznávania položiek – len ako pripomienka, čo to bolo.</span></span>
        </div>`}
   </div>`;
@@ -620,10 +631,14 @@ function renderMeal(){
   <div id="m-result"></div>`;
 
   $("#m-note").oninput = e=>{ meal.note=e.target.value; };
+  /* two inputs, not one: `capture` sends Android straight to the camera and its
+     absence sends it straight to the gallery, so neither alone offers a choice */
   const addPhotoBtn=$("#m-addphoto");
   if(addPhotoBtn){
+    const pick=(inputSel)=>{ $(inputSel).onchange=e=>{ const f=e.target.files[0]; if(f) attachPhoto(f); }; };
+    pick("#m-photofile"); pick("#m-photocam");
     addPhotoBtn.onclick = ()=> $("#m-photofile").click();
-    $("#m-photofile").onchange = e=>{ const f=e.target.files[0]; if(f) attachPhoto(f); };
+    $("#m-addphotocam").onclick = ()=> $("#m-photocam").click();
   }
   const delPhotoBtn=$("#m-delphoto");
   if(delPhotoBtn) delPhotoBtn.onclick = ()=>{ meal.photo=null; renderMeal(); };
@@ -636,8 +651,11 @@ function renderMeal(){
 
   if(meal.mode==="scan"){
     if(!meal.scanBusy){
-      $("#m-scanbtn").onclick = ()=> $("#m-billfile").click();
-      $("#m-billfile").onchange = e=>{ const f=e.target.files[0]; if(f) scanBillImage(f); };
+      const onPicked = e=>{ const f=e.target.files[0]; if(f) scanBillImage(f); };
+      $("#m-billfile").onchange = onPicked;
+      $("#m-billcam").onchange = onPicked;
+      $("#m-scanpick").onclick = ()=> $("#m-billfile").click();
+      $("#m-scancam").onclick = ()=> $("#m-billcam").click();
       const addBtn=$("#m-additem");
       if(addBtn) addBtn.onclick = ()=>{
         const name=prompt("Názov položky:"); if(!name) return;
