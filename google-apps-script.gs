@@ -17,6 +17,7 @@ function getToken_() {
 
 var SHEET_NAME = 'Ledger';
 var SETTINGS_SHEET = 'Settings';
+var QUOTES_SHEET = 'Výroky';
 var HEADERS = ['ID', 'Kind', 'Date', 'From / Payer', 'To / Meal', 'Total', 'Details', 'Poznámka', 'Účtenka', 'JSON'];
 var NEW_COLS = ['Poznámka', 'Účtenka'];
 
@@ -83,6 +84,40 @@ function readSettings_() {
   return null;
 }
 
+/* ---------- babine výroky ----------
+ * One quote per row in column A of the "Výroky" sheet, so anyone can add or
+ * fix one straight in the spreadsheet without touching the app. Column B is
+ * only a note about when it was added – the app never reads it.
+ */
+function getQuotesSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(QUOTES_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(QUOTES_SHEET);
+    sh.appendRow(['Výrok', 'Pridané']);
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 520);
+    sh.getRange(1, 4).setValue('Sem píšte babine výroky – jeden na riadok do stĺpca A. Aplikácia každý deň ukáže jeden.');
+  }
+  return sh;
+}
+
+function readQuotes_() {
+  var sh;
+  // doGet has no lock, so two first-ever reads could race on insertSheet;
+  // losing that race must not fail the whole sync.
+  try { sh = getQuotesSheet_(); }
+  catch (err) { sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(QUOTES_SHEET); }
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    var t = String(vals[i][0] == null ? '' : vals[i][0]).trim();
+    if (t) out.push(t);
+  }
+  return out;
+}
+
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -111,7 +146,7 @@ function doGet(e) {
         } catch (err) { /* skip malformed row */ }
       }
     }
-    return json_({ ok: true, entries: entries, settings: readSettings_() });
+    return json_({ ok: true, entries: entries, settings: readSettings_(), quotes: readQuotes_() });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -210,6 +245,31 @@ function doPost(e) {
         }
       }
       return json_({ ok: true });
+    }
+
+    if (body.action === 'addQuote' && body.text) {
+      var qt = String(body.text).trim().slice(0, 500);
+      // Adding is idempotent: the client retries a lost reply, and the quote
+      // may already be in the sheet from the attempt whose answer never came.
+      if (qt && readQuotes_().indexOf(qt) < 0) {
+        getQuotesSheet_().appendRow([qt, Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')]);
+      }
+      return json_({ ok: true, quotes: readQuotes_() });
+    }
+
+    // No longer reachable from the app – the Výroky sheet is where výroky get
+    // removed now. Kept so any request still queued on a phone drains instead
+    // of coming back 'unknown action' and wedging that phone's queue.
+    if (body.action === 'deleteQuote' && body.text) {
+      var dq = String(body.text).trim();
+      var qsh = getQuotesSheet_();
+      if (qsh.getLastRow() > 1) {
+        var qrows = qsh.getRange(2, 1, qsh.getLastRow() - 1, 1).getValues();
+        for (var qi = qrows.length - 1; qi >= 0; qi--) {
+          if (String(qrows[qi][0]).trim() === dq) { qsh.deleteRow(qi + 2); break; }
+        }
+      }
+      return json_({ ok: true, quotes: readQuotes_() });
     }
 
     if (body.action === 'saveSettings' && body.settings) {

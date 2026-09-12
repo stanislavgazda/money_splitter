@@ -136,6 +136,12 @@
   .x{border:none; background:none; color:var(--red); font-size:var(--fs-lg); cursor:pointer; padding:4px 8px; flex:none;
      display:inline-flex; align-items:center;}
   .muted{color:var(--muted); font-size:var(--fs-md);}
+  /* výrok dňa – the one place in the app where text, not a number, is the point */
+  .quotebox{
+    background:var(--green-soft); color:var(--text); border-radius:var(--r-sm);
+    padding:14px 16px; font-size:var(--fs-lg); font-style:italic; line-height:1.45;
+    letter-spacing:-.01em;
+  }
   .listrow{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
   .listrow input{flex:1;}
   .listrow input.price{max-width:90px;}
@@ -236,6 +242,7 @@ if(!S.syncUrl) S.syncUrl = DEFAULT_SYNC_URL;
 let PASS = loadLS("ms_pass", "");
 let ledger = loadLS("ms_ledger", []);
 let queue  = loadLS("ms_queue", []);
+let quotes = loadLS("ms_quotes", []);
 let currentTab = "meal";
 let meal = null; // current meal form state
 
@@ -264,6 +271,44 @@ const round2 = n => Math.round(n*100)/100;
 const fmt = n => S.currency + round2(n).toFixed(2);
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ---------- skloňovanie mien rodín ----------
+   Rodiny sa dajú v nastaveniach premenovať, takže tu nie je pevný zoznam mien –
+   rod a číslo sa odhadnú z koncovky a datív sa vyskloňuje po slovách
+   ("Baba Soňa" → "Babe Soni", "Gazdovci" → "Gazdovcom"). Sloveso sa potom
+   zhoduje s podmetom: "Gazdovci zaplatili", "Baba Soňa zaplatila". */
+const MAKKE = "ňťďľčšžcj";                     // po týchto spoluhláskach má ženský datív -i (Soňa → Soni), inak -e (Baba → Babe)
+const TVRDNE = { "ň":"n", "ť":"t", "ď":"d", "ľ":"l" };   // ...a ň/ť/ď/ľ pritom stráca mäkčeň, lebo ho nahradí to -i
+function gramWord(w){
+  const l = w.toLowerCase();
+  if(/ovci$/.test(l))            return { g:"pl", dat:w.slice(0,-1)+"om" };    // Gazdovci → Gazdovcom
+  if(/[íý]$/.test(l))            return { g:"pl", dat:w.slice(0,-1)+"ým" };    // Mutňanskí → Mutňanským
+  if(/[sc]k[iy]$/.test(l))       return { g:"pl", dat:w.slice(0,-1)+"ym" };    // Mutnanski (bez diakritiky) → Mutnanskym
+  if(/ia$/.test(l))              return { g:"f",  dat:w.slice(0,-1)+"i" };     // Mária → Márii
+  if(/a$/.test(l)){
+    const c = l.slice(-2,-1);                                                  // spoluhláska pred koncovým -a
+    return c && MAKKE.indexOf(c)>=0
+      ? { g:"f", dat:w.slice(0,-2)+(TVRDNE[c]||w.slice(-2,-1))+"i" }           // Soňa → Soni, Káča → Káči
+      : { g:"f", dat:w.slice(0,-1)+"e" };                                      // Baba → Babe
+  }
+  if(/[oe]$/.test(l))            return { g:"m",  dat:w.slice(0,-1)+"ovi" };   // Jožo → Jožovi
+  if(/er$/.test(l))              return { g:"m",  dat:w.slice(0,-2)+"rovi" };  // Peter → Petrovi
+  if(/ol$/.test(l))              return { g:"m",  dat:w.slice(0,-2)+"lovi" };  // Pavol → Pavlovi
+  return { g:"m", dat:w+"ovi" };                                               // Jozef → Jozefovi
+}
+/* Rod/číslo určuje posledné slovo mena, datív sa skloňuje celý. */
+function gram(name){
+  const words = String(name==null?"":name).trim().split(/\s+/).filter(Boolean);
+  if(!words.length) return { g:"?", dat:"" };
+  const parts = words.map(gramWord);
+  return { g:parts[parts.length-1].g, dat:parts.map(p=>p.dat).join(" ") };
+}
+const VERBS = {
+  zaplatil: { m:"zaplatil", f:"zaplatila", pl:"zaplatili", "?":"zaplatil(a)" },
+  plati:    { m:"platí",    f:"platí",     pl:"platia",    "?":"platí" }
+};
+const vb  = (name, key) => VERBS[key][gram(name).g] || VERBS[key]["?"];  // sloveso v tvare pre dané meno
+const dat = name => gram(name).dat || String(name==null?"":name);        // 3. pád: "komu"
 
 /* Settings are saved locally AND pushed to the Sheet (Settings tab).
    Newest updatedAt wins across devices. */
@@ -322,6 +367,14 @@ function applyQueue(list){
   }
   return out;
 }
+function applyQuoteQueue(list){
+  let out = list.slice();
+  for(const q of queue){
+    if(q.action==="addQuote"){ if(!out.includes(q.text)) out.push(q.text); }
+    else if(q.action==="deleteQuote") out = out.filter(t=>t!==q.text);
+  }
+  return out;
+}
 let passRetried = false;
 let syncing = false;
 /* syncNow fires from four places (load, the online event, the badge, opening
@@ -347,6 +400,11 @@ async function syncRun(){
     if(!res.ok) throw new Error(res.error||"list failed");
     ledger = applyQueue(res.entries||[]);
     saveLedger();
+    // kept only to feed quoteOfDay() – the app never lists them
+    if(res.quotes){
+      quotes = applyQuoteQueue(res.quotes);
+      saveLS("ms_quotes", quotes);
+    }
     if(res.settings && (res.settings.updatedAt||0) > (S.updatedAt||0)){
       adoptServerSettings(res.settings);
       if(currentTab==="meal") renderMeal();
@@ -821,10 +879,54 @@ function saveMeal(){
   const html = `<div class="result"><b>${ico("check")} Uložené</b>
     ${entry.note?`<div>${ico("note")} ${esc(entry.note)}</div>`:""}
     ${meal.photo?`<div>${ico("camera")} Účtenka sa ukladá…</div>`:""}
-    ${owes.map(f=>`<div>${esc(f)} platí ${esc(meal.payer)} <b>${fmt(c.shares[f])}</b></div>`).join("")||"<div>Nič sa nedlží – platiteľ jedol sám.</div>"}
+    ${owes.map(f=>`<div>${esc(f)} ${vb(f,"plati")} ${esc(dat(meal.payer))} <b>${fmt(c.shares[f])}</b></div>`).join("")||"<div>Nič sa nedlží – platiteľ jedol sám.</div>"}
   </div>`;
   meal=newMealState(); renderMeal();
   $("#m-result").innerHTML=html;
+}
+
+/* ---------- babin výrok dňa ----------
+   Everybody must see the same výrok on the same day, so nothing random is
+   stored: the day number picks it. The list is shuffled with a seed derived
+   from the cycle number, so all výroky come round once before any repeats. */
+function shuffledOrder(n, seed){
+  let s = (Math.imul(seed, 2654435761) + 1) >>> 0;
+  const rnd = ()=>{                       // mulberry32
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s>>>15), 1 | s);
+    t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+  const a = Array.from({length:n}, (_,i)=>i);
+  for(let i=n-1; i>0; i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+/* Two independent shuffles can put the same výrok at the end of one cycle and
+   the start of the next; showing it two days running looks like the app is
+   stuck, so the seam is patched. Swapping the first two entries keeps the
+   cycle a permutation and never touches index n-1, which is what the next
+   cycle compares against. n=2 can't be fixed that way – it just alternates. */
+function cycleOrder(n, cycle){
+  const a = shuffledOrder(n, cycle);
+  if(n > 2 && a[0] === shuffledOrder(n, cycle-1)[n-1]){ const t=a[0]; a[0]=a[1]; a[1]=t; }
+  return a;
+}
+function quoteOfDay(){
+  const n = quotes.length;
+  if(!n) return null;
+  const d = today().split("-").map(Number);
+  const dayNum = Math.floor(Date.UTC(d[0], d[1]-1, d[2]) / 86400000);
+  if(n <= 2) return quotes[dayNum % n];
+  return quotes[cycleOrder(n, Math.floor(dayNum/n))[dayNum % n]];
+}
+function quoteCardHtml(){
+  const q = quoteOfDay();
+  return `
+  <div class="card">
+    <h2>Babin výrok dňa</h2>
+    ${q ? `<div class="quotebox">„${esc(q)}“</div>`
+        : `<div class="muted">Zatiaľ žiadne výroky – pridajte prvý v Nastaveniach.</div>`}
+  </div>`;
 }
 
 /* ---------- balances tab ---------- */
@@ -835,7 +937,7 @@ function histExtras(e){
 function renderBalances(){
   const pairs=computeBalances();
   const hist=ledger.slice().sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.id>a.id?1:-1));
-  $("#tab-balances").innerHTML = `
+  $("#tab-balances").innerHTML = quoteCardHtml() + `
   <div class="card">
     <h2>Kto komu dlží</h2>
     ${pairs.length? pairs.map((p,i)=>`
@@ -849,14 +951,14 @@ function renderBalances(){
     <h2>História (${hist.length})</h2>
     ${hist.map(e=> e.kind==="meal" ? `
       <div class="hist"><div>
-        <div><b>${esc(e.payer)}</b> zaplatil(a) ${fmt(e.total)} — ${esc(e.desc||"")}</div>
+        <div><b>${esc(e.payer)}</b> ${vb(e.payer,"zaplatil")} ${fmt(e.total)} — ${esc(e.desc||"")}</div>
         <div class="sub">${esc(e.date||"")} · ${(e.mode==="sums"||e.mode==="scan")
           ? Object.entries(e.shares||{}).map(([f,v])=>esc(f)+": "+fmt(v)).join(", ")
           : Object.entries(e.portions||{}).map(([f,v])=>esc(f)+": "+v).join(", ")}</div>
         ${histExtras(e)}
       </div><button class="x" data-del="${e.id}">${ico("x")}</button></div>` : `
       <div class="hist"><div>
-        <div>${ico("banknote")} <b>${esc(e.from)}</b> zaplatil(a) <b>${esc(e.to)}</b> ${fmt(e.amount)}</div>
+        <div>${ico("banknote")} <b>${esc(e.from)}</b> ${vb(e.from,"zaplatil")} <b>${esc(dat(e.to))}</b> ${fmt(e.amount)}</div>
         <div class="sub">${esc(e.date||"")} · vyrovnanie</div>
         ${histExtras(e)}
       </div><button class="x" data-del="${e.id}">${ico("x")}</button></div>`).join("") || '<div class="muted">Zatiaľ žiadne jedlá.</div>'}
@@ -865,7 +967,7 @@ function renderBalances(){
     const s=e.target.closest("[data-settle]");
     if(s){
       const p=pairs[+s.dataset.settle];
-      const v=prompt(`Koľko zaplatil(a) ${p.from} pre ${p.to}?`, p.amount.toFixed(2));
+      const v=prompt(`Koľko ${vb(p.from,"zaplatil")} ${p.from} ${dat(p.to)}?`, p.amount.toFixed(2));
       if(v===null) return;
       const amt=parseFloat(v);
       if(isNaN(amt)||amt<=0){ alert("Neplatná suma"); return; }
@@ -914,6 +1016,13 @@ function renderSettings(){
     <div class="spacer"></div>
     <label>Symbol meny</label>
     <input id="s-curr" value="${esc(S.currency)}" style="max-width:90px">
+  </div>
+  <div class="card">
+    <h2 class="ttl">Babine výroky <span class="info"><button type="button" class="info-ico" aria-label="Ako to funguje?">i</button><span class="info-pop">Každý deň sa v Zostatkoch ukáže jeden výrok. Všetky sú v hárku „Výroky“ v Google Sheete – tam sa dajú prečítať, opraviť alebo zmazať.</span></span></h2>
+    <textarea id="s-newquote" placeholder="Napíšte nový babin výrok…" style="min-height:64px"></textarea>
+    <div class="spacer"></div>
+    <button class="btn small" id="s-addquote">+ Pridať výrok</button>
+    <div class="muted" id="s-qmsg" style="margin-top:8px"></div>
   </div>`;
 
   /* ===== ZAKOMENTOVANÉ (júl 2026): karta „Záloha" už nie je potrebná =====
@@ -950,6 +1059,7 @@ function renderSettings(){
     const t=e.target;
     if(t.id==="s-pass"){ PASS=t.value.trim(); saveLS("ms_pass",PASS); return; }
     if(t.id==="s-url") return; // saved via test button
+    if(t.id==="s-newquote") return; // a draft výrok is not a setting
     if(t.dataset.fam!==undefined){ const v=t.value.trim(); if(v) S.families[+t.dataset.fam]=v; }
     if(t.dataset.cname!==undefined){ S.components[+t.dataset.cname].name=t.value.trim()||"Položka"; }
     if(t.dataset.cprice!==undefined){ S.components[+t.dataset.cprice].price=Math.max(0,parseFloat(t.value)||0); }
@@ -967,6 +1077,17 @@ function renderSettings(){
     const n=prompt("Názov rodiny:"); if(!n) return;
     if(S.families.includes(n.trim())){ alert("Názov už existuje."); return; }
     S.families.push(n.trim()); saveSettings(); meal=null; renderSettings();
+  };
+  $("#s-addquote").onclick = ()=>{
+    const ta=$("#s-newquote"), t=ta.value.trim(), msg=$("#s-qmsg");
+    if(!t) return;
+    if(quotes.includes(t)){ msg.innerHTML=ico("alert")+" Tento výrok už máte."; return; }
+    // Výroky live in their own sheet, not in the settings JSON, so they go out
+    // as their own action instead of riding along with saveSettings().
+    quotes.push(t); saveLS("ms_quotes",quotes);
+    sendOrQueue({action:"addQuote", text:t});
+    ta.value="";
+    msg.innerHTML=ico("check")+" Výrok pridaný – objaví sa v Zostatkoch.";
   };
   $("#s-addcomp").onclick = ()=>{
     const n=prompt("Názov položky:"); if(!n) return;
